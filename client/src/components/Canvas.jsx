@@ -12,11 +12,22 @@ const Canvas = forwardRef(function Canvas({
   onDrawActive,
   onCursorMove,
   socket,
+  viewOffset = { x: 0, y: 0 },
+  onViewOffsetChange,
+  scale = 1,
+  onScaleChange,
 }, ref) {
   const canvasRef = useRef(null);
   const overlayRef = useRef(null);
   const containerRef = useRef(null);
+  const viewportRef = useRef(null);
   const [isDrawing, setIsDrawing] = useState(false);
+  const [isPanning, setIsPanning] = useState(false);
+  const [isZooming, setIsZooming] = useState(false);
+  const [remoteActiveStrokes, setRemoteActiveStrokes] = useState({});
+  const panOffset = useRef({ x: viewOffset.x, y: viewOffset.y });
+  const lastPanPos = useRef(null);
+  const lastTouchDist = useRef(null);
   const [currentPoints, setCurrentPoints] = useState([]);
   const [startPos, setStartPos] = useState(null);
   const [currentPos, setCurrentPos] = useState(null);
@@ -25,6 +36,17 @@ const Canvas = forwardRef(function Canvas({
 
   // Expose canvas ref to parent
   useImperativeHandle(ref, () => canvasRef.current);
+
+  // Reset state on tool change to prevent glitches
+  useEffect(() => {
+    setIsDrawing(false);
+    setIsPanning(false);
+    setCurrentPoints([]);
+    setStartPos(null);
+    setCurrentPos(null);
+    setTextInput(null);
+    lastPanPos.current = null;
+  }, [tool]);
 
   // Resize handler
   useEffect(() => {
@@ -51,8 +73,23 @@ const Canvas = forwardRef(function Canvas({
     observer.observe(container);
     resize();
 
+    // Set initial CSS offset
+    if (viewportRef.current) {
+      viewportRef.current.style.setProperty('--pan-x', `${viewOffset.x}px`);
+      viewportRef.current.style.setProperty('--pan-y', `${viewOffset.y}px`);
+    }
+
     return () => observer.disconnect();
   }, [strokes, theme]);
+
+  // Sync prop changes (e.g. from Undo/Redo that might affect view?)
+  useEffect(() => {
+    panOffset.current = { x: viewOffset.x, y: viewOffset.y };
+    if (viewportRef.current) {
+      viewportRef.current.style.setProperty('--pan-x', `${viewOffset.x}px`);
+      viewportRef.current.style.setProperty('--pan-y', `${viewOffset.y}px`);
+    }
+  }, [viewOffset.x, viewOffset.y]);
 
   // Redraw all strokes
   const redrawCanvas = useCallback(() => {
@@ -62,15 +99,40 @@ const Canvas = forwardRef(function Canvas({
     const dpr = window.devicePixelRatio || 1;
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
+    
+    // Apply panning & scaling
+    ctx.save();
+    ctx.scale(scale, scale);
+    ctx.translate(panOffset.current.x, panOffset.current.y);
 
-
+    // Draw grid/background pattern if needed
+    if (theme === 'grid') {
+       drawGrid(ctx, canvas.width / dpr, canvas.height / dpr);
+    }
 
     // Draw strokes
     for (const stroke of strokes) {
       drawStroke(ctx, stroke);
     }
-  }, [strokes, theme]);
+    ctx.restore();
+  }, [strokes, theme, scale]);
+
+  function drawGrid(ctx, w, h) {
+    const size = 40;
+    const offsetX = panOffset.current.x % size;
+    const offsetY = panOffset.current.y % size;
+    
+    ctx.strokeStyle = 'rgba(212, 163, 115, 0.2)';
+    ctx.lineWidth = 0.5;
+    
+    for (let x = offsetX - size; x < w / scale + size; x += size) {
+      ctx.beginPath(); ctx.moveTo(x, -panOffset.current.y); ctx.lineTo(x, (h / scale) - panOffset.current.y); ctx.stroke();
+    }
+    for (let y = offsetY - size; y < h / scale + size; y += size) {
+      ctx.beginPath(); ctx.moveTo(-panOffset.current.x, y); ctx.lineTo((w / scale) - panOffset.current.x, y); ctx.stroke();
+    }
+  }
 
   useEffect(() => {
     redrawCanvas();
@@ -81,36 +143,123 @@ const Canvas = forwardRef(function Canvas({
     if (!socket) return;
 
     const handleRemoteDrawActive = (data) => {
-      const overlay = overlayRef.current;
-      if (!overlay) return;
-      const ctx = overlay.getContext('2d');
-      const dpr = window.devicePixelRatio || 1;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.clearRect(0, 0, overlay.width, overlay.height);
+      setRemoteActiveStrokes(prev => ({
+        ...prev,
+        [data.userId]: data
+      }));
+    };
 
-      if (data.points && data.points.length > 1) {
-        ctx.strokeStyle = data.color || '#000';
-        ctx.globalAlpha = data.opacity !== undefined ? data.opacity : 1;
-        ctx.lineWidth = data.size || 3;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.beginPath();
-        ctx.moveTo(data.points[0].x, data.points[0].y);
-        for (let i = 1; i < data.points.length; i++) {
-          const p0 = data.points[i - 1];
-          const p1 = data.points[i];
-          const mx = (p0.x + p1.x) / 2;
-          const my = (p0.y + p1.y) / 2;
-          ctx.quadraticCurveTo(p0.x, p0.y, mx, my);
-        }
-        ctx.stroke();
-        ctx.globalAlpha = 1;
-      }
+    const handleRemoteStrokeDrawn = () => {
+      // When any stroke is committed, we can clear the remote active state for that user
+      // Or we can rely on a timer/event. 
+      // For now, let's keep it simple: the next draw-active or the final stroke-drawn will sync it.
     };
 
     socket.on('draw-active', handleRemoteDrawActive);
-    return () => socket.off('draw-active', handleRemoteDrawActive);
+    return () => {
+      socket.off('draw-active', handleRemoteDrawActive);
+    };
   }, [socket]);
+
+  // Handle clearing remote active stroke when it's committed to the main list
+  useEffect(() => {
+     // If the length of strokes changes, some remote stroke might have finished.
+     // However, we don't know which user. 
+     // A better way is to listen for 'stroke-drawn' and clear that specific user.
+     if (!socket) return;
+     const onStrokeDrawn = (stroke) => {
+        setRemoteActiveStrokes(prev => {
+          const next = { ...prev };
+          delete next[stroke.userId];
+          return next;
+        });
+     };
+     socket.on('stroke-drawn', onStrokeDrawn);
+     return () => socket.off('stroke-drawn', onStrokeDrawn);
+  }, [socket]);
+
+  // Separate effect for overlay rendering to handle both local and remote active strokes
+  useEffect(() => {
+    const overlay = overlayRef.current;
+    if (!overlay) return;
+    const ctx = overlay.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+
+    const renderOverlay = () => {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, overlay.width / dpr, overlay.height / dpr);
+      
+      ctx.save();
+      ctx.scale(scale, scale);
+      ctx.translate(panOffset.current.x, panOffset.current.y);
+
+      // 1. Draw Remote Active Strokes
+      Object.values(remoteActiveStrokes).forEach(data => {
+        if (data.points && data.points.length > 1) {
+          ctx.strokeStyle = data.color || '#000';
+          ctx.globalAlpha = data.opacity !== undefined ? data.opacity : 1;
+          ctx.lineWidth = data.size || 3;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.beginPath();
+          ctx.moveTo(data.points[0].x, data.points[0].y);
+          for (let i = 1; i < data.points.length; i++) {
+            const p0 = data.points[i - 1];
+            const p1 = data.points[i];
+            ctx.quadraticCurveTo(p0.x, p0.y, (p0.x + p1.x) / 2, (p0.y + p1.y) / 2);
+          }
+          ctx.stroke();
+        }
+      });
+
+      // 2. Draw Local Active Stroke
+      if (isDrawing) {
+        ctx.strokeStyle = tool === 'eraser' ? 'rgba(156, 163, 175, 0.5)' : color;
+        ctx.globalAlpha = brushOpacity;
+        ctx.lineWidth = brushSize;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        if (tool === 'pen' || tool === 'eraser') {
+          if (currentPoints.length > 1) {
+            ctx.beginPath();
+            ctx.moveTo(currentPoints[0].x, currentPoints[0].y);
+            for (let i = 1; i < currentPoints.length; i++) {
+              const p0 = currentPoints[i - 1];
+              const p1 = currentPoints[i];
+              ctx.quadraticCurveTo(p0.x, p0.y, (p0.x + p1.x) / 2, (p0.y + p1.y) / 2);
+            }
+            ctx.stroke();
+          }
+        } else if (startPos && currentPos) {
+           // Draw shape previews...
+           if (tool === 'rectangle') {
+            ctx.strokeRect(Math.min(startPos.x, currentPos.x), Math.min(startPos.y, currentPos.y), Math.abs(currentPos.x - startPos.x), Math.abs(currentPos.y - startPos.y));
+          } else if (tool === 'circle') {
+            const cx = (startPos.x + currentPos.x) / 2;
+            const cy = (startPos.y + currentPos.y) / 2;
+            const rx = Math.abs(currentPos.x - startPos.x) / 2;
+            const ry = Math.abs(currentPos.y - startPos.y) / 2;
+            ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); ctx.stroke();
+          } else if (tool === 'line') {
+            ctx.beginPath(); ctx.moveTo(startPos.x, startPos.y); ctx.lineTo(currentPos.x, currentPos.y); ctx.stroke();
+          } else if (tool === 'arrow') {
+            const angle = Math.atan2(currentPos.y - startPos.y, currentPos.x - startPos.x);
+            const headLen = 15;
+            ctx.beginPath(); ctx.moveTo(startPos.x, startPos.y); ctx.lineTo(currentPos.x, currentPos.y); ctx.stroke();
+            ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(currentPos.x, currentPos.y);
+            ctx.lineTo(currentPos.x - headLen * Math.cos(angle - Math.PI / 6), currentPos.y - headLen * Math.sin(angle - Math.PI / 6));
+            ctx.lineTo(currentPos.x - headLen * Math.cos(angle + Math.PI / 6), currentPos.y - headLen * Math.sin(angle + Math.PI / 6));
+            ctx.closePath(); ctx.fill();
+          }
+        }
+      }
+
+      ctx.restore();
+    };
+
+    renderOverlay();
+  }, [remoteActiveStrokes, isDrawing, currentPoints, currentPos, startPos, tool, color, brushSize, brushOpacity, scale, theme]);
 
   function drawStroke(ctx, stroke) {
     if (!stroke) return;
@@ -216,11 +365,22 @@ const Canvas = forwardRef(function Canvas({
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    
+    let clientX, clientY;
+    if (e.touches && e.touches.length > 0) {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else if (e.changedTouches && e.changedTouches.length > 0) {
+      clientX = e.changedTouches[0].clientX;
+      clientY = e.changedTouches[0].clientY;
+    } else {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    }
+
     return {
-      x: clientX - rect.left,
-      y: clientY - rect.top,
+      x: ((clientX - rect.left) / scale) - panOffset.current.x,
+      y: ((clientY - rect.top) / scale) - panOffset.current.y,
     };
   };
 
@@ -232,6 +392,24 @@ const Canvas = forwardRef(function Canvas({
 
     if (tool === 'text') {
       setTextInput({ x: pos.x, y: pos.y });
+      return;
+    }
+
+    if (e.touches && e.touches.length === 2 && onScaleChange) {
+      setIsPanning(false);
+      setIsDrawing(false);
+      setIsZooming(true);
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      lastTouchDist.current = dist;
+      return;
+    }
+
+    if (tool === 'pan') {
+      setIsPanning(true);
+      lastPanPos.current = { x: e.touches ? e.touches[0].clientX : e.clientX, y: e.touches ? e.touches[0].clientY : e.clientY };
       return;
     }
 
@@ -255,42 +433,35 @@ const Canvas = forwardRef(function Canvas({
       lastCursorEmit.current = now;
     }
 
+    if (isZooming && e.touches && e.touches.length === 2 && onScaleChange) {
+       // ... existing zoom logic ...
+       onScaleChange(prev => Math.min(Math.max(prev * delta, 0.5), 5));
+       lastTouchDist.current = dist;
+       redrawCanvas();
+       return;
+    }
+
+    if (isPanning) {
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      const dx = (clientX - lastPanPos.current.x) / scale;
+      const dy = (clientY - lastPanPos.current.y) / scale;
+      
+      panOffset.current.x += dx;
+      panOffset.current.y += dy;
+      
+      lastPanPos.current = { x: clientX, y: clientY };
+      redrawCanvas(); // Immediate redraw for smoothness
+      return;
+    }
+
     if (!isDrawing || !canDraw) return;
     e.preventDefault();
 
     if (tool === 'pen' || tool === 'eraser') {
       setCurrentPoints(prev => [...prev, pos]);
 
-      // Draw live preview on overlay
-      const overlay = overlayRef.current;
-      if (overlay) {
-        const ctx = overlay.getContext('2d');
-        const dpr = window.devicePixelRatio || 1;
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        ctx.clearRect(0, 0, overlay.width, overlay.height);
-
-        const pts = [...currentPoints, pos];
-        if (pts.length > 1) {
-          ctx.strokeStyle = tool === 'eraser'
-            ? 'rgba(156, 163, 175, 0.5)'
-            : color;
-          ctx.globalAlpha = brushOpacity;
-          ctx.lineWidth = brushSize;
-          ctx.lineCap = 'round';
-          ctx.lineJoin = 'round';
-          ctx.beginPath();
-          ctx.moveTo(pts[0].x, pts[0].y);
-          for (let i = 1; i < pts.length; i++) {
-            const p0 = pts[i - 1];
-            const p1 = pts[i];
-            ctx.quadraticCurveTo(p0.x, p0.y, (p0.x + p1.x) / 2, (p0.y + p1.y) / 2);
-          }
-          ctx.stroke();
-          ctx.globalAlpha = 1;
-        }
-      }
-
-      // Throttled broadcast
+      const now = Date.now();
       if (now - lastCursorEmit.current > 30) {
         onDrawActive({
           points: [...currentPoints, pos],
@@ -302,60 +473,25 @@ const Canvas = forwardRef(function Canvas({
       }
     } else {
       setCurrentPos(pos);
-
-      // Draw shape preview on overlay
-      const overlay = overlayRef.current;
-      if (overlay && startPos) {
-        const ctx = overlay.getContext('2d');
-        const dpr = window.devicePixelRatio || 1;
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        ctx.clearRect(0, 0, overlay.width, overlay.height);
-
-        ctx.strokeStyle = color;
-        ctx.globalAlpha = brushOpacity;
-        ctx.lineWidth = brushSize;
-        ctx.lineCap = 'round';
-
-        if (tool === 'rectangle') {
-          const x = Math.min(startPos.x, pos.x);
-          const y = Math.min(startPos.y, pos.y);
-          ctx.strokeRect(x, y, Math.abs(pos.x - startPos.x), Math.abs(pos.y - startPos.y));
-        } else if (tool === 'circle') {
-          const cx = (startPos.x + pos.x) / 2;
-          const cy = (startPos.y + pos.y) / 2;
-          const rx = Math.abs(pos.x - startPos.x) / 2;
-          const ry = Math.abs(pos.y - startPos.y) / 2;
-          ctx.beginPath();
-          ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
-          ctx.stroke();
-        } else if (tool === 'line') {
-          ctx.beginPath();
-          ctx.moveTo(startPos.x, startPos.y);
-          ctx.lineTo(pos.x, pos.y);
-          ctx.stroke();
-        } else if (tool === 'arrow') {
-          ctx.beginPath();
-          ctx.moveTo(startPos.x, startPos.y);
-          ctx.lineTo(pos.x, pos.y);
-          ctx.stroke();
-          const angle = Math.atan2(pos.y - startPos.y, pos.x - startPos.x);
-          const headLen = 15;
-          ctx.fillStyle = color;
-          ctx.beginPath();
-          ctx.moveTo(pos.x, pos.y);
-          ctx.lineTo(pos.x - headLen * Math.cos(angle - Math.PI / 6), pos.y - headLen * Math.sin(angle - Math.PI / 6));
-          ctx.lineTo(pos.x - headLen * Math.cos(angle + Math.PI / 6), pos.y - headLen * Math.sin(angle + Math.PI / 6));
-          ctx.closePath();
-          ctx.fill();
-        }
-        ctx.globalAlpha = 1;
-      }
     }
   };
 
   const handleEnd = (e) => {
-    if (!isDrawing || !canDraw) return;
+    if (isPanning && onViewOffsetChange) {
+      onViewOffsetChange({ x: panOffset.current.x, y: panOffset.current.y });
+    }
+
+    // Capture final position before finishing
+    const pos = getPos(e);
+    if (isDrawing && tool !== 'pen' && tool !== 'eraser') {
+      setCurrentPos(pos);
+    }
+
     setIsDrawing(false);
+    setIsPanning(false);
+    setIsZooming(false);
+    lastPanPos.current = null;
+    lastTouchDist.current = null;
 
     // Clear overlay
     const overlay = overlayRef.current;
@@ -409,33 +545,41 @@ const Canvas = forwardRef(function Canvas({
     <div
       ref={containerRef}
       className={`w-full h-full relative overflow-hidden bg-white ${theme === 'grid' ? 'canvas-grid' : ''}`}
-      style={{ cursor: tool === 'text' ? 'text' : tool === 'eraser' ? 'cell' : 'crosshair' }}
+      style={{ 
+        cursor: tool === 'text' ? 'text' : tool === 'eraser' ? 'cell' : 'crosshair',
+        backgroundPosition: `${panOffset.current.x * scale}px ${panOffset.current.y * scale}px`
+      }}
     >
-      {/* Main canvas (renders committed strokes) */}
-      <canvas
-        ref={canvasRef}
+      <div 
+        ref={viewportRef}
         className="absolute inset-0"
-      />
+      >
+        {/* Main canvas (renders committed strokes) */}
+        <canvas
+          ref={canvasRef}
+          className="absolute inset-0"
+        />
 
-      {/* Overlay canvas (live preview) */}
-      <canvas
-        ref={overlayRef}
-        className="absolute inset-0"
-        onMouseDown={handleStart}
-        onMouseMove={handleMove}
-        onMouseUp={handleEnd}
-        onMouseLeave={handleEnd}
-        onTouchStart={handleStart}
-        onTouchMove={handleMove}
-        onTouchEnd={handleEnd}
-        style={{ touchAction: 'none' }}
-      />
+        {/* Overlay canvas (live preview) */}
+        <canvas
+          ref={overlayRef}
+          className="absolute inset-0"
+          onMouseDown={handleStart}
+          onMouseMove={handleMove}
+          onMouseUp={handleEnd}
+          onMouseLeave={handleEnd}
+          onTouchStart={handleStart}
+          onTouchMove={handleMove}
+          onTouchEnd={handleEnd}
+          style={{ touchAction: 'none' }}
+        />
+      </div>
 
       {/* Text input popup */}
       {textInput && (
         <div
           className="absolute z-20"
-          style={{ left: textInput.x, top: textInput.y }}
+          style={{ left: (textInput.x + panOffset.current.x) * scale, top: (textInput.y + panOffset.current.y) * scale }}
         >
           <input
             type="text"

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Pencil, Eraser, Square, Circle, Minus, Hand, MessageSquare, Users as UsersIcon } from 'lucide-react';
 import { useSocket } from '../hooks/useSocket';
 import Toolbar from '../components/Toolbar';
 import TopBar from '../components/TopBar';
@@ -21,6 +22,8 @@ export default function WhiteboardPage() {
 
   // Drawing state
   const [tool, setTool] = useState('pen');
+  const [viewOffset, setViewOffset] = useState({ x: 0, y: 0 });
+  const [scale, setScale] = useState(1);
   const [color, setColor] = useState('#000000');
   const [brushSize, setBrushSize] = useState(3);
   const [brushOpacity, setBrushOpacity] = useState(1.0);
@@ -315,7 +318,7 @@ export default function WhiteboardPage() {
   const canDraw = !isLocked || isCaptain;
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-sky-200 text-slate-800 font-body relative">
+    <div className="h-[100dvh] flex flex-col overflow-hidden bg-sky-200 text-slate-800 font-body relative">
       {/* Background Ambience Layer */}
       <div className="fixed inset-0 z-0 bg-sky-300 pointer-events-none" />
       <div className="fixed bottom-0 left-0 w-full h-[60vh] bg-gradient-to-t from-sky-500/30 to-transparent pointer-events-none z-0" />
@@ -374,8 +377,34 @@ export default function WhiteboardPage() {
             onDrawActive={handleDrawActive}
             onCursorMove={handleCursorMove}
             socket={socket}
+            viewOffset={viewOffset}
+            onViewOffsetChange={setViewOffset}
+            scale={scale}
+            onScaleChange={setScale}
           />
-          <LiveCursors cursors={cursors} />
+          <LiveCursors cursors={cursors} viewOffset={viewOffset} />
+          
+          {/* Virtual Scrollbars (Rollers) */}
+          <div className="absolute right-1 top-1 bottom-1 w-1.5 z-20 pointer-events-none">
+            <div 
+              className="w-full bg-[#A50000]/40 rounded-full transition-all"
+              style={{ 
+                height: '30%', 
+                transform: `translateY(${-viewOffset.y % 100}%)`,
+                opacity: viewOffset.y !== 0 ? 1 : 0.2
+              }}
+            />
+          </div>
+          <div className="absolute bottom-1 left-1 right-1 h-1.5 z-20 pointer-events-none">
+            <div 
+              className="h-full bg-[#A50000]/40 rounded-full transition-all"
+              style={{ 
+                width: '30%', 
+                transform: `translateX(${-viewOffset.x % 100}%)`,
+                opacity: viewOffset.x !== 0 ? 1 : 0.2
+              }}
+            />
+          </div>
         </div>
 
         {/* Right Panel */}
@@ -394,35 +423,45 @@ export default function WhiteboardPage() {
         </div>
       </div>
 
-      {/* Mobile Bottom Toolbar */}
-      <div className="md:hidden">
-        <div className="flex items-center justify-around py-2 px-4 border-t bg-surface-navy border-border-navy">
+      {/* Mobile Floating Toolbar (Top) */}
+      <div className="md:hidden fixed top-20 left-1/2 -translate-x-1/2 z-50 w-[95%] max-w-sm" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-around p-2.5 rounded-2xl bg-[#1A1A1A] border-2 border-[#D4A373]/50 shadow-[0_4px_20px_rgb(0,0,0,0.4)] backdrop-blur-md">
           <button
             onClick={() => setMobileToolbarOpen(!mobileToolbarOpen)}
-            className="p-2 rounded-lg hover:bg-white/5"
+            className="p-2 rounded-lg bg-white/5 text-white"
           >
             🎨
           </button>
-          {['pen', 'eraser', 'rectangle', 'circle', 'line'].map(t => (
+          {['pen', 'eraser', 'rectangle', 'circle', 'line', 'pan'].map(t => (
             <button
               key={t}
               onClick={() => setTool(t)}
-              className={`p-2 rounded-lg text-sm ${tool === t ? 'bg-primary text-white' : 'hover:bg-white/5'}`}
+              className={`p-2.5 rounded-xl transition-all ${
+                tool === t 
+                  ? 'bg-[#A50000] text-white shadow-lg scale-110' 
+                  : 'text-white/40 hover:bg-white/10'
+              }`}
             >
-              {t === 'pen' ? '✏️' : t === 'eraser' ? '🧹' : t === 'rectangle' ? '⬜' : t === 'circle' ? '⭕' : '📏'}
+              {t === 'pen' ? <Pencil className="w-5 h-5" /> : 
+               t === 'eraser' ? <Eraser className="w-5 h-5" /> : 
+               t === 'rectangle' ? <Square className="w-5 h-5" /> : 
+               t === 'circle' ? <Circle className="w-5 h-5" /> : 
+               t === 'line' ? <Minus className="w-5 h-5" /> : 
+               <Hand className="w-5 h-5" />}
             </button>
           ))}
+          <div className="w-px h-6 bg-white/10 mx-1" />
           <button
             onClick={() => { setRightPanelOpen(!rightPanelOpen); setRightTab('chat'); }}
-            className="p-2 rounded-lg hover:bg-white/5"
+            className={`p-2.5 rounded-xl ${rightTab === 'chat' && rightPanelOpen ? 'bg-[#A50000] text-white' : 'text-white/40'}`}
           >
-            💬
+            <MessageSquare className="w-5 h-5" />
           </button>
           <button
             onClick={() => { setRightPanelOpen(!rightPanelOpen); setRightTab('crew'); }}
-            className="p-2 rounded-lg hover:bg-white/5"
+            className={`p-2.5 rounded-xl ${rightTab === 'crew' && rightPanelOpen ? 'bg-[#A50000] text-white' : 'text-white/40'}`}
           >
-            👥
+            <UsersIcon className="w-5 h-5" />
           </button>
         </div>
       </div>

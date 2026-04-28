@@ -63,7 +63,7 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="relative h-screen w-full bg-sky-200 overflow-hidden font-body text-slate-800 flex flex-col items-center justify-center selection:bg-[#A50000] selection:text-white">
+    <div className="relative min-h-[100dvh] w-full bg-sky-200 overflow-y-auto font-body text-slate-800 flex flex-col items-center justify-center selection:bg-[#A50000] selection:text-white py-10">
       
       {/* Background Ambience Layer */}
       <div className="fixed inset-0 z-0 bg-sky-300 pointer-events-none" />

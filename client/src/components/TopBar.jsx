@@ -41,7 +41,7 @@ export default function TopBar({
   };
 
   return (
-    <div className="h-16 flex items-center justify-between px-6 shrink-0 z-20 bg-[#FDF6E3]/80 backdrop-blur-md border-b-[3px] border-[#D4A373] shadow-sm relative">
+    <div className="h-16 flex items-center justify-between px-3 sm:px-6 shrink-0 z-20 bg-[#FDF6E3]/80 backdrop-blur-md border-b-[3px] border-[#D4A373] shadow-sm relative">
       {/* Decorative Deckle Edge */}
       <div className="absolute -bottom-[3px] left-0 w-full h-1 bg-repeat-x opacity-40 mix-blend-multiply pointer-events-none" style={{ backgroundImage: "linear-gradient(135deg, transparent 50%, #D4A373 50%), linear-gradient(45deg, #D4A373 50%, transparent 50%)", backgroundSize: "6px 4px" }} />
 
@@ -51,29 +51,28 @@ export default function TopBar({
           <div className="w-10 h-10 rounded-full bg-[#A50000] flex items-center justify-center shadow-lg group-hover:rotate-12 transition-transform border-2 border-white/20">
             <span className="text-white text-base font-black">☠</span>
           </div>
-          <div className="flex flex-col">
+          <div className="flex flex-col hidden sm:flex">
             <span className="font-['Permanent_Marker'] font-bold text-2xl tracking-tight leading-none mb-0.5 uppercase">
               <span className="text-white drop-shadow-[2px_2px_0px_rgba(0,0,0,0.2)]">INK</span>
               <span className="text-[#A50000] drop-shadow-[1px_1px_0px_rgba(255,255,255,0.3)]">YAIBA</span>
             </span>
-            <span className="text-[9px] font-black text-[#5C4033]/60 tracking-[0.3em] uppercase leading-none">
+            <span className="text-[9px] font-black text-[#5C4033]/60 tracking-[0.3em] uppercase leading-none hidden sm:block">
               The Grand Line Room
             </span>
           </div>
         </div>
 
-        <div className="h-6 w-px bg-[#D4A373] hidden md:block" />
-
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-sm bg-white/50 border-2 border-[#D4A373] shadow-sm">
-            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse shadow-sm" />
-            <span className="font-mono font-black text-sm tracking-widest text-slate-800 uppercase">{roomCode}</span>
+        <div className="h-6 w-px bg-[#D4A373] hidden lg:block" />
+        <div className="flex items-center gap-2 sm:gap-4">
+          <div className="flex items-center gap-1.5 sm:gap-2 px-2 py-1 sm:px-3 sm:py-1.5 rounded-sm bg-white/50 border-2 border-[#D4A373] shadow-sm">
+            <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shadow-sm" />
+            <span className="font-mono font-black text-xs sm:text-sm tracking-wider sm:tracking-widest text-slate-800 uppercase">{roomCode}</span>
             <button
               onClick={copyCode}
               className="p-1 rounded bg-[#EADCB6] transition-colors text-[#5C4033] hover:bg-[#D4A373] hover:text-white"
               title="Copy Room Charter"
             >
-              {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+              {copied ? <Check className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> : <Copy className="w-3 h-3 sm:w-3.5 sm:h-3.5" />}
             </button>
           </div>
 
@@ -98,7 +97,7 @@ export default function TopBar({
                  </div>
                )}
             </div>
-            <span className="text-[#5C4033] text-xs font-black border-l-2 border-[#D4A373] pl-2 ml-1 tracking-wide">
+            <span className="text-[#5C4033] text-xs font-black border-l-2 border-[#D4A373] pl-2 ml-1 tracking-wide hidden lg:block">
               {userCount} PIRATES
             </span>
           </div>
@@ -122,24 +121,24 @@ export default function TopBar({
         </button>
 
         {isCaptain && (
-          <div className="flex items-center gap-1 ml-1 pl-3 border-l-2 border-[#D4A373]">
+          <div className="flex items-center gap-1 ml-1 pl-2 sm:pl-3 border-l-2 border-[#D4A373]">
             <button
               onClick={onToggleLock}
               data-tooltip={isLocked ? 'Unlock Workspace' : 'Lock Workspace'}
-              className={`p-1.5 rounded-md border-2 border-transparent transition-colors ${
+              className={`p-1 sm:p-1.5 rounded-md border-2 border-transparent transition-colors ${
                 isLocked
                   ? 'bg-amber-100 text-amber-600 border-amber-300'
                   : 'text-[#5C4033] border-[#5C4033]/20 hover:bg-[#EADCB6]'
               }`}
             >
-              {isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+              {isLocked ? <Lock className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Unlock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
             </button>
             <button
               onClick={onClear}
               data-tooltip="Clean Deck (Clear Board)"
-              className="p-1.5 rounded-md text-[#5C4033] border-2 border-[#5C4033]/20 hover:bg-[#A50000] hover:text-white hover:border-[#A50000] transition-colors"
+              className="p-1 sm:p-1.5 rounded-md text-[#5C4033] border-2 border-[#5C4033]/20 hover:bg-[#A50000] hover:text-white hover:border-[#A50000] transition-colors"
             >
-              <Trash2 className="w-4 h-4" />
+              <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
           </div>
         )}
@@ -172,10 +171,11 @@ export default function TopBar({
         {/* Leave Room Button */}
         <button
           onClick={onLeave}
-          className="ml-2 px-4 py-2 bg-[#D92323] text-white text-xs font-black uppercase tracking-widest rounded-sm border-b-[4px] border-[#7A0000] shadow-md flex items-center gap-2 hover:translate-y-0.5 hover:border-b-2 active:border-b-0 active:translate-y-1 transition-all"
+          title="Abandon Ship"
+          className="ml-2 px-3 py-2 sm:px-4 bg-[#D92323] text-white text-xs font-black uppercase tracking-widest rounded-sm border-b-[4px] border-[#7A0000] shadow-md flex items-center gap-2 hover:translate-y-0.5 hover:border-b-2 active:border-b-0 active:translate-y-1 transition-all"
         >
            <LogOut className="w-4 h-4" />
-           LEAVE ROOM
+           <span className="hidden sm:inline">LEAVE ROOM</span>
         </button>
       </div>
     </div>

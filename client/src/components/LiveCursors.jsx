@@ -6,7 +6,7 @@ const CURSOR_SVG = (color) => `
 </svg>
 `;
 
-export default function LiveCursors({ cursors }) {
+export default function LiveCursors({ cursors, viewOffset = { x: 0, y: 0 } }) {
   const cursorEntries = useMemo(() => Object.entries(cursors), [cursors]);
 
   if (cursorEntries.length === 0) return null;
@@ -18,8 +18,8 @@ export default function LiveCursors({ cursors }) {
           key={userId}
           className="absolute transition-all duration-75 ease-out"
           style={{
-            left: data.x,
-            top: data.y,
+            left: data.x + viewOffset.x,
+            top: data.y + viewOffset.y,
             transform: 'translate(-2px, -2px)',
           }}
         >
