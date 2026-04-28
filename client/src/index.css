@@ -1,0 +1,101 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800;900&family=Permanent+Marker&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #A50000; /* Ink Red */
+  --color-primary-hover: #800000;
+  --color-gold: #D4A373; /* Nautical Gold */
+  
+  --color-bg-navy: #09090b;
+  --color-surface-navy: #18181b;
+  --color-border-navy: #27272a;
+
+  --color-parchment: #FDF6E3;
+  --color-ink-black: #1A1A1A;
+
+  --font-display: 'Outfit', sans-serif;
+  --font-body: 'Inter', sans-serif;
+}
+
+body {
+  font-family: var(--font-body);
+  background-color: #F8FAFC;
+  color: #0F172A;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.dark body {
+  background-color: var(--color-bg-navy);
+  color: #F8FAFC;
+}
+
+::selection {
+  background-color: rgba(165, 0, 0, 0.2);
+  color: inherit;
+}
+
+/* ─── Glassmorphism ─── */
+.glass {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  border-right: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.dark .glass {
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* ─── Scrollbar ─── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { 
+  background: #CBD5E1; 
+  border-radius: 4px;
+}
+.dark ::-webkit-scrollbar-thumb { background: #334155; }
+::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+.dark ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+/* ─── Tooltips ─── */
+[data-tooltip] { position: relative; }
+[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%) translateX(4px);
+  padding: 6px 10px;
+  background: #1A1A1A;
+  color: #FFFFFF;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border-radius: 4px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  z-index: 50;
+  border: 1px solid rgba(212, 163, 115, 0.3);
+}
+[data-tooltip]:hover::after { 
+  opacity: 1;
+  transform: translateY(-50%) translateX(8px);
+}
+
+/* ─── Canvas Backgrounds ─── */
+.canvas-grid {
+  background-image:
+    linear-gradient(rgba(139, 90, 43, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(139, 90, 43, 0.1) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
