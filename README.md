@@ -83,9 +83,9 @@ InkYaiba/
 ---
 
 ## ⚓ The Creed
-Built with passion for the **Hackathon 2024**. InkYaiba is more than a tool; it's a testament to the power of collaborative creativity under pressure.
+Built with passion for the **Hackathon 2026**. InkYaiba is more than a tool; it's a testament to the power of collaborative creativity under pressure.
 
 **"Inherited Will, The Tide of the Times, and The Dreams of the People. These are things that will not be stopped."**
 
 ---
-© 2024 InkYaiba Team | Set Sail! 🏴‍☠️
+© 2026 InkYaiba Team | Set Sail! 🏴‍☠️
