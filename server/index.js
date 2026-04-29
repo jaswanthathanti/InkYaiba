@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3001;
 
 // CORS
 app.use(cors({
-  origin: [CLIENT_URL, 'http://localhost:5173', 'http://localhost:4173'],
+  origin: [CLIENT_URL, 'http://localhost:5173', 'http://localhost:4173', 'https://inkyaiba.netlify.app/'],
   methods: ['GET', 'POST'],
 }));
 
@@ -24,7 +24,7 @@ app.use(express.json());
 // Socket.IO
 const io = new Server(server, {
   cors: {
-    origin: [CLIENT_URL, 'http://localhost:5173', 'http://localhost:4173'],
+    origin: [CLIENT_URL, 'http://localhost:5173', 'http://localhost:4173', 'https://inkyaiba.netlify.app/'],
     methods: ['GET', 'POST'],
   },
   pingTimeout: 60000,
