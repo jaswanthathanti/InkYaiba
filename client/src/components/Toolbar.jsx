@@ -206,7 +206,7 @@ export default function Toolbar({
               value={brushSize}
               onChange={(e) => setBrushSize(Number(e.target.value))}
               className="accent-[#D92323] cursor-pointer"
-              style={{ writingMode: 'vertical-lr', direction: 'rtl', appearance: 'slider-vertical' }}
+              style={{ writingMode: 'vertical-lr', direction: 'rtl' }}
             />
           </div>
           <span className="text-[10px] font-bold text-white">{brushSize}</span>
@@ -223,7 +223,7 @@ export default function Toolbar({
               value={brushOpacity}
               onChange={(e) => setBrushOpacity(Number(e.target.value))}
               className="accent-[#D92323] cursor-pointer"
-              style={{ writingMode: 'vertical-lr', direction: 'rtl', appearance: 'slider-vertical' }}
+              style={{ writingMode: 'vertical-lr', direction: 'rtl' }}
             />
           </div>
           <span className="text-[10px] font-bold text-white">{(brushOpacity * 100).toFixed(0)}%</span>
